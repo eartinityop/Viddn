@@ -25,10 +25,10 @@ jobs:
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
@@ -113,8 +113,8 @@ jobs:
       run: |
         zip -r "${{ github.event.inputs.folder_name }}.zip" "${{ github.event.inputs.folder_name }}"/
 
-    - name: Upload processed videos
-      uses: actions/upload-artifact@v3
+    - name: Upload processed videos as artifact
+      uses: actions/upload-artifact@v4
       with:
         name: processed-videos
         path: ${{ github.event.inputs.folder_name }}.zip
@@ -125,9 +125,10 @@ jobs:
     
     steps:
     - name: Download artifact
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: processed-videos
+        path: .
 
     - name: Create Release
       id: create_release
