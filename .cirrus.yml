@@ -13,3 +13,4 @@ task:
       - pip3 install yt-dlp
       - chmod +x Downloader.py
       - bash Downloader.py
+      - ls
