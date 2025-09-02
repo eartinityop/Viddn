@@ -1,5 +1,4 @@
-task:
-  name: "Downloading video and compressing playback speed"
+name: "Downloading video and compressing playback speed"
   timeout_in: 240m  
   container:
       image: ubuntu/latest
@@ -14,3 +13,4 @@ task:
       - chmod +x Downloader.py
       - bash Downloader.py
       - ls
+      
