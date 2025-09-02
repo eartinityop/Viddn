@@ -1,0 +1,15 @@
+task:
+  name: "Downloading video and compressing playback speed"
+  timeout_in: 240m  
+  container:
+      image: ubuntu/latest
+      cpu: 8
+      memory: 32G
+      
+  Sync_script:
+      - cd ~
+      - apt update
+      - apt install -y python3 python3-pip ffmpeg
+      - pip3 install yt-dlp
+      - chmod +x Downloader.py
+      - bash Downloader.py
