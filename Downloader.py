@@ -5,9 +5,9 @@ import subprocess
 
 # PREDEFINED SETTINGS - EDIT THESE VALUES
 FOLDER_NAME = "downloaded_videos"  # Change to your preferred folder name
-PLAYLIST_URL = "https://youtube.com/playlist?list=YOUR_PLAYLIST_ID"  # Replace with your playlist URL
-RESOLUTION = "720p"  # Change to desired resolution (360p, 480p, 720p, 1080p, etc.)
-PLAYBACK_SPEED = "1.0"  # Change to desired speed (1.0 for normal, 1.25 for 1.25x, etc.)
+PLAYLIST_URL = "https://www.youtube.com/live/GLEZZdGwuXU?feature=shared"  # Replace with your playlist URL
+RESOLUTION = "480p"  # Change to desired resolution (360p, 480p, 720p, 1080p, etc.)
+PLAYBACK_SPEED = "1.5"  # Change to desired speed (1.0 for normal, 1.25 for 1.25x, etc.)
 
 def main():
     # Create the folder if it doesn't exist
