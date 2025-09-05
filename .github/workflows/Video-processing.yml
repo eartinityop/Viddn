@@ -30,9 +30,23 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y ffmpeg wget bc
 
+    - name: Extract filename from URL
+      shell: bash
+      run: |
+        # Extract the base filename from the URL, handling URLs with query parameters
+        FILENAME=$(basename "${{ github.event.inputs.video_url }}" | cut -d'?' -f1)
+        # If the filename doesn't end with .mp4, default to 'video.mp4'
+        if [[ ! "$FILENAME" =~ \.mp4$ ]]; then
+          FILENAME="video.mp4"
+        fi
+        echo "ORIGINAL_FILENAME=$FILENAME" >> $GITHUB_ENV
+        # Create the processed filename by inserting '_15x' before the .mp4 extension
+        PROCESSED_FILENAME="${FILENAME%.mp4}_${{ github.event.inputs.playback_speed }}x.mp4"
+        echo "PROCESSED_FILENAME=$PROCESSED_FILENAME" >> $GITHUB_ENV
+
     - name: Download video from provided URL
       run: |
-        wget -O original_video.mp4 "${{ github.event.inputs.video_url }}"
+        wget -O "$ORIGINAL_FILENAME" "${{ github.event.inputs.video_url }}"
 
     - name: Calculate FFmpeg filter values
       shell: bash
@@ -44,27 +58,27 @@ jobs:
 
     - name: Process video with FFmpeg
       run: |
-        ffmpeg -i original_video.mp4 \
+        ffmpeg -i "$ORIGINAL_FILENAME" \
         -filter_complex "[0:v]${VIDEO_FILTER}[v];[0:a]${AUDIO_FILTER}[a]" \
         -map "[v]" -map "[a]" \
         -c:v libx264 -preset medium -crf 23 \
         -c:a aac -b:a 128k \
         -movflags +faststart \
-        processed_video.mp4
+        "$PROCESSED_FILENAME"
 
     - name: Create Release and Upload Asset
       uses: softprops/action-gh-release@v1
       with:
         tag_name: video-${{ github.run_id }}
-        name: "Processed Video (${{ github.event.inputs.playback_speed }}x)"
+        name: "${{ env.ORIGINAL_FILENAME }} (${{ github.event.inputs.playback_speed }}x)"
         body: |
           Video processed at ${{ github.event.inputs.playback_speed }}x speed
           - Original URL: ${{ github.event.inputs.video_url }}
           - Processed on: ${{ github.event.inputs.playback_speed }}
-        files: processed_video.mp4
+        files: ${{ env.PROCESSED_FILENAME }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Cleanup
       run: |
-        rm -f original_video.mp4 processed_video.mp4
+        rm -f "$ORIGINAL_FILENAME" "$PROCESSED_FILENAME"
