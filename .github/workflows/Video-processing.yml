@@ -64,10 +64,10 @@ jobs:
         body: |
           - ${{ github.event.inputs.release_name }} processed at ${{ github.event.inputs.playback_speed }}x speed
           - Processed on: ${{ github.event.inputs.playback_speed }}
-        files: ${{ env.PROCESSED_FILENAME }}
+        files: output_video.mp4
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Cleanup
       run: |
-        rm -f "$ORIGINAL_FILENAME" "$PROCESSED_FILENAME"
+        rm -f "$ORIGINAL_FILENAME" output_video.mp4
