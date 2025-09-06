@@ -23,7 +23,7 @@ permissions:
 jobs:
   process-video:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 240
 
     steps:
     - name: Checkout repository
@@ -69,9 +69,9 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: video-${{ github.run_id }}
-        name: "${{ env.ORIGINAL_FILENAME }} (${{ github.event.inputs.playback_speed }}x)"
+        name: "${{ github.event.inputs.release_name }}"
         body: |
-          ${{ github.event.inputs.release_name }} processed at ${{ github.event.inputs.playback_speed }}x speed
+          - ${{ github.event.inputs.release_name }} processed at ${{ github.event.inputs.playback_speed }}x speed
           - Processed on: ${{ github.event.inputs.playback_speed }}
         files: ${{ env.PROCESSED_FILENAME }}
       env:
