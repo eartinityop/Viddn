@@ -19,7 +19,7 @@ permissions:
 jobs:
   process-video:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 45
 
     steps:
     - name: Checkout repository
@@ -33,14 +33,14 @@ jobs:
     - name: Extract filename from URL
       shell: bash
       run: |
-        # Extract the base filename from the URL, handling URLs with query parameters
+        # Extract the base filename from the URL
         FILENAME=$(basename "${{ github.event.inputs.video_url }}" | cut -d'?' -f1)
         # If the filename doesn't end with .mp4, default to 'video.mp4'
         if [[ ! "$FILENAME" =~ \.mp4$ ]]; then
           FILENAME="video.mp4"
         fi
         echo "ORIGINAL_FILENAME=$FILENAME" >> $GITHUB_ENV
-        # Create the processed filename by inserting '_15x' before the .mp4 extension
+        # Create the processed filename by inserting speed before the .mp4 extension
         PROCESSED_FILENAME="${FILENAME%.mp4}_${{ github.event.inputs.playback_speed }}x.mp4"
         echo "PROCESSED_FILENAME=$PROCESSED_FILENAME" >> $GITHUB_ENV
 
@@ -48,20 +48,15 @@ jobs:
       run: |
         wget -O "$ORIGINAL_FILENAME" "${{ github.event.inputs.video_url }}"
 
-    - name: Calculate FFmpeg filter values
-      shell: bash
+    - name: Process video with FFmpeg (TV Compatible with Speed Change)
       run: |
-        # Video speed calculation: 1 / desired speed
-        VIDEO_SPEED=$(echo "scale=10; 1 / ${{ github.event.inputs.playback_speed }}" | bc)
-        echo "VIDEO_FILTER=setpts=${VIDEO_SPEED}*PTS" >> $GITHUB_ENV
-        echo "AUDIO_FILTER=atempo=${{ github.event.inputs.playback_speed }}" >> $GITHUB_ENV
-
-    - name: Process video with FFmpeg
-      run: |
+        # Calculate video speed factor (1/desired_speed)
+        SPEED_FACTOR=$(echo "scale=10; 1 / ${{ github.event.inputs.playback_speed }}" | bc)
+        
         ffmpeg -i "$ORIGINAL_FILENAME" \
-        -filter_complex "[0:v]${VIDEO_FILTER}[v];[0:a]${AUDIO_FILTER}[a]" \
+        -filter_complex "[0:v]setpts=${SPEED_FACTOR}*PTS[v];[0:a]atempo=${{ github.event.inputs.playback_speed }}[a]" \
         -map "[v]" -map "[a]" \
-        -c:v libx264 -preset medium -crf 23 \
+        -c:v libx264 -profile:v main -level 4.0 -pix_fmt yuv420p \
         -c:a aac -b:a 128k \
         -movflags +faststart \
         "$PROCESSED_FILENAME"
