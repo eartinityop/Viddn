@@ -54,16 +54,7 @@ jobs:
 
     - name: Process video with FFmpeg (TV Compatible with Speed Change)
       run: |
-        # Calculate video speed factor (1/desired_speed)
-        SPEED_FACTOR=$(echo "scale=10; 1 / ${{ github.event.inputs.playback_speed }}" | bc)
-        
-        ffmpeg -i "$ORIGINAL_FILENAME" \
-        -filter_complex "[0:v]setpts=${SPEED_FACTOR}*PTS[v];[0:a]atempo=${{ github.event.inputs.playback_speed }}[a]" \
-        -map "[v]" -map "[a]" \
-        -c:v libx264 -profile:v main -level 4.0 -pix_fmt yuv420p \
-        -c:a aac -b:a 128k \
-        -movflags +faststart \
-        "$PROCESSED_FILENAME"
+        ffmpeg -i "$ORIGINAL_FILENAME" -filter_complex "[0:v]setpts=0.6666666666*PTS[v];[0:a]atempo=${{ github.event.inputs.playback_speed }}[a]" -map "[v]" -map "[a]" -c:v libx264 -profile:v main -level 4.0 -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart output_video.mp4
 
     - name: Create Release and Upload Asset
       uses: softprops/action-gh-release@v1
