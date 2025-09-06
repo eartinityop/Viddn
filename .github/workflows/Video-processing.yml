@@ -12,6 +12,10 @@ on:
         required: true
         type: number
         default: 1.5
+      release_name:
+        description: 'Release Name'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -67,8 +71,7 @@ jobs:
         tag_name: video-${{ github.run_id }}
         name: "${{ env.ORIGINAL_FILENAME }} (${{ github.event.inputs.playback_speed }}x)"
         body: |
-          Video processed at ${{ github.event.inputs.playback_speed }}x speed
-          - Original URL: ${{ github.event.inputs.video_url }}
+          ${{ github.event.inputs.release_name }} processed at ${{ github.event.inputs.playback_speed }}x speed
           - Processed on: ${{ github.event.inputs.playback_speed }}
         files: ${{ env.PROCESSED_FILENAME }}
       env:
