@@ -12,10 +12,6 @@ on:
         required: true
         type: number
         default: 1.5
-      release_name:
-        description: 'Release Name'
-        required: true
-        type: string
       video_title:
         description: 'Video title'
         required: true
@@ -48,9 +44,9 @@ jobs:
 
     - name: Download YouTube Uploader
       run: |
-        wget -q https://github.com/porjo/youtubeuploader/releases/download/23.03/youtubeuploader_linux_amd64
-        chmod +x youtubeuploader_linux_amd64
-        sudo mv youtubeuploader_linux_amd64 /usr/local/bin/youtubeuploader
+        wget -q https://github.com/porjo/youtubeuploader/releases/download/v1.25.5/youtubeuploader_1.25.5_Linux_amd64.tar.gz
+        chmod +x youtubeuploader_1.25.5_Linux_amd64.tar.gz
+        sudo mv youtubeuploader_1.25.5_Linux_amd64 /usr/local/bin/youtubeuploader
         
     - name: Extract filename from URL
       shell: bash
