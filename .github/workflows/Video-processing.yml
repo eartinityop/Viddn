@@ -36,18 +36,15 @@ jobs:
     - name: Install required packages
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg wget bc
+        sudo apt-get install -y ffmpeg wget bc python3 python3-pip
 
     - name: Setup Service Account JSON
       run: |
         echo '${{ secrets.YOUTUBE_SERVICE_ACCOUNT_JSON }}' > service-account.json
 
-    - name: Download YouTube Uploader
+    - name: Setup Python Environment
       run: |
-        wget -q https://github.com/porjo/youtubeuploader/releases/download/v1.25.5/youtubeuploader_1.25.5_Linux_amd64.tar.gz
-        chmod +x youtubeuploader_1.25.5_Linux_amd64.tar.gz
-        tar -xzf youtubeuploader_1.25.5_Linux_amd64.tar.gz --one-top-level
-        sudo mv youtubeuploader_1.25.5_Linux_amd64 /usr/local/bin/youtubeuploader
+        pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
         
     - name: Extract filename from URL
       shell: bash
@@ -73,14 +70,12 @@ jobs:
 
     - name: Upload Video to YouTube
       run: | 
-        youtubeuploader \
-          -filename output_video.mp4 \
-          -title "${{ github.event.inputs.video_title }}" \
-          -description "${{ github.event.inputs.video_description }}" \
-          -privacy "private" \
-          -category "22" \
-          -tags "processed,automated" \
-          -credentials "service-account.json"
+        python3 youtube_upload.py \
+          --credentials service-account.json \
+          --file output_video.mp4 \
+          --title "${{ github.event.inputs.video_title }}" \
+          --description "${{ github.event.inputs.video_description }}" \
+          --privacy "private"
     - name: Cleanup
       run: |
         rm -f "$ORIGINAL_FILENAME" output_video.mp4
