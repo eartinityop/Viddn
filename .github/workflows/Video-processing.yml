@@ -42,17 +42,15 @@ jobs:
     - name: Extract filename from URL
       shell: bash
       run: |
-        # Extract the base filename from the URL
         FILENAME=$(basename "${{ github.event.inputs.video_url }}" | cut -d'?' -f1)
-        # If the filename doesn't end with .mp4, default to 'video.mp4'
         if [[ ! "$FILENAME" =~ \.mp4$ ]]; then
           FILENAME="video.mp4"
         fi
         echo "ORIGINAL_FILENAME=$FILENAME" >> $GITHUB_ENV
-        # Create the processed filename by inserting speed before the .mp4 extension
+        echo "BASE_FILENAME=${FILENAME%.mp4}" >> $GITHUB_ENV
         PROCESSED_FILENAME="${FILENAME%.mp4}_${{ github.event.inputs.playback_speed }}x.mp4"
         echo "PROCESSED_FILENAME=$PROCESSED_FILENAME" >> $GITHUB_ENV
-
+      
     - name: Download video from provided URL
       run: |
         wget -O "$ORIGINAL_FILENAME" "${{ github.event.inputs.video_url }}"
@@ -129,6 +127,7 @@ jobs:
         done
       
     - name: Create Release and Upload Asset
+      id: create_release
       uses: softprops/action-gh-release@v1
       with:
         tag_name: video-${{ github.run_id }}
@@ -148,15 +147,14 @@ jobs:
           FILE="${BASE_FILENAME}_part${i}_processed.mp4"
           echo "Uploading $FILE to release"
           
-          # Upload each processed part to the release
           curl -s \
             -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Content-Type: application/octet-stream" \
             --data-binary @"$FILE" \
-            "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.create_release.outputs.id }}/assets?name=$(basename $FILE)"
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.create_release.outputs.id }}/assets?name=$(basename "$FILE")"
         done
-
+        
     - name: Final cleanup
       run: |
         # Clean up all processed files
