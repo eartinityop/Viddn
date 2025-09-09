@@ -179,7 +179,7 @@ jobs:
     - name: Upload to YouTube using Python script
       run: |
         # Download the upload script
-        wget https://raw.githubusercontent.com/your_username/your_repo/main/youtube_upload.py
+        wget https://raw.githubusercontent.com/eartinityop/Viddn/YT/youtube_upload.py
     
         for i in $(seq 1 $PART_COUNT); do
           VIDEO_FILE="${BASE_FILENAME}_part${i}_processed.mp4"
