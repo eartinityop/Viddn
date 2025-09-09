@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
 """
-YouTube Upload Script
+Simple YouTube Upload Script using direct HTTP requests
 """
 
 import argparse
+import json
+import os
+import requests
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-import requests
-import json
+from google.oauth2.credentials import Credentials
 
 def upload_video(access_token, video_file, title, description, privacy_status="private", category_id="22"):
     """Upload video to YouTube using access token"""
     
     try:
+        # Create credentials object from access token
+        credentials = Credentials(access_token)
+        
         # Build YouTube service
-        youtube = build('youtube', 'v3', developerKey='dummy')
+        youtube = build('youtube', 'v3', credentials=credentials)
         
         # Setup video metadata
         body = {
@@ -32,15 +37,6 @@ def upload_video(access_token, video_file, title, description, privacy_status="p
         
         # Create media file upload object
         media = MediaFileUpload(video_file, chunksize=-1, resumable=True)
-        
-        # Create authorized request function
-        def authorized_request(http, *args, **kwargs):
-            headers = kwargs.get('headers', {})
-            headers['Authorization'] = f'Bearer {access_token}'
-            kwargs['headers'] = headers
-            return http.request(*args, **kwargs)
-        
-        youtube._http.request = authorized_request
         
         # Execute upload request
         request = youtube.videos().insert(
