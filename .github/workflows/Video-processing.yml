@@ -43,6 +43,11 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y ffmpeg wget bc
 
+    - name: Install Python dependencies
+      run: |
+        python3 -m pip install --upgrade pip
+        pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib requests
+
     - name: Extract filename from URL
       shell: bash
       run: |
@@ -173,11 +178,16 @@ jobs:
 
     - name: Upload to YouTube using Python script
       run: |
+        # Download the upload script
+        wget https://raw.githubusercontent.com/your_username/your_repo/main/youtube_upload.py
+    
         for i in $(seq 1 $PART_COUNT); do
           VIDEO_FILE="${BASE_FILENAME}_part${i}_processed.mp4"
           TITLE="${{ github.event.inputs.video_title }} - Part $i of $PART_COUNT"
           DESCRIPTION="Part $i of $PART_COUNT. Processed at ${{ github.event.inputs.playback_speed }}x speed"
-          
+      
+          echo "Uploading part $i to YouTube..."
+      
           python3 youtube_upload.py \
             --file "$VIDEO_FILE" \
             --title "$TITLE" \
