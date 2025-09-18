@@ -46,23 +46,11 @@ jobs:
     - name: Install Python dependencies
       run: |
         python3 -m pip install --upgrade pip
-        pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib requests
-
-    - name: Extract filename from URL
-      shell: bash
-      run: |
-        FILENAME=$(basename "${{ github.event.inputs.video_url }}" | cut -d'?' -f1)
-        if [[ ! "$FILENAME" =~ \.mp4$ ]]; then
-          FILENAME="video.mp4"
-        fi
-        echo "ORIGINAL_FILENAME=$FILENAME" >> $GITHUB_ENV
-        echo "BASE_FILENAME=${FILENAME%.mp4}" >> $GITHUB_ENV
-        PROCESSED_FILENAME="${FILENAME%.mp4}_${{ github.event.inputs.playback_speed }}x.mp4"
-        echo "PROCESSED_FILENAME=$PROCESSED_FILENAME" >> $GITHUB_ENV
+        pip install yt-dlp google-api-python-client google-auth-httplib2 google-auth-oauthlib requests
       
     - name: Download video from provided URL
       run: |
-        wget -O "$ORIGINAL_FILENAME" "${{ github.event.inputs.video_url }}"
+        yt-dlp --oauth-client-id "${{ secrets.YT_CLIENT_ID }}" --oauth-client-secret "${{ secrets.YT_CLIENT_SECRET }}" --oauth-refresh-token "${{ secrets.YT_REFRESH_TOKEN }}" -f "best" -o "%(playlist_title)s/%(title)s [%(id)s].%(ext)s" --embed-metadata --embed-thumbnail --no-overwrites "https://www.youtube.com/playlist?list=YOUR_PLAYLIST_ID_HERE"
 
     - name: Get video duration
       run: |
