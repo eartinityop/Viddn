@@ -50,7 +50,7 @@ jobs:
       
     - name: Download video from provided URL
       run: |
-        yt-dlp --oauth-client-id "${{ secrets.YOUTUBE_CLIENT_ID }}" --oauth-client-secret "${{ secrets.YOUTUBE_CLIENT_SECRET }}" --oauth-refresh-token "${{ secrets.YOUTUBE_REFRESH_TOKEN }}" -f "best" -o "%(playlist_title)s/%(title)s [%(id)s].%(ext)s" --embed-metadata --embed-thumbnail --no-overwrites "https://youtube.com/playlist?list=PL_A4M5IAkMaexM2nxZt512ESPt83EshJq&feature=shared"
+        echo "${{ secrets.NETRC_B64 }}" | base64 -d > ~/.netrc && yt-dlp --netrc -f "best" -o "%(playlist_title)s/%(title)s [%(id)s].%(ext)s" --embed-metadata --embed-thumbnail --no-overwrites "https://youtube.com/playlist?list=PL_A4M5IAkMaexM2nxZt512ESPt83EshJq&feature=shared"
 
     - name: Get video duration
       run: |
