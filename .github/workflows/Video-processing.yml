@@ -1,4 +1,4 @@
-name: Video Processor and Publisher
+pname: Video Processor and Publisher
 
 on:
   workflow_dispatch:
@@ -50,7 +50,7 @@ jobs:
       
     - name: Download video from provided URL
       run: |
-        yt-dlp --oauth-client-id "${{ secrets.YT_CLIENT_ID }}" --oauth-client-secret "${{ secrets.YT_CLIENT_SECRET }}" --oauth-refresh-token "${{ secrets.YT_REFRESH_TOKEN }}" -f "best" -o "%(playlist_title)s/%(title)s [%(id)s].%(ext)s" --embed-metadata --embed-thumbnail --no-overwrites "https://www.youtube.com/playlist?list=YOUR_PLAYLIST_ID_HERE"
+        yt-dlp --oauth-client-id "${{ secrets.YOUTUBE_CLIENT_ID }}" --oauth-client-secret "${{ secrets.YOUTUBE_CLIENT_SECRET }}" --oauth-refresh-token "${{ secrets.YOUTUBE_REFRESH_TOKEN }}" -f "best" -o "%(playlist_title)s/%(title)s [%(id)s].%(ext)s" --embed-metadata --embed-thumbnail --no-overwrites "https://youtube.com/playlist?list=PL_A4M5IAkMaexM2nxZt512ESPt83EshJq&feature=shared"
 
     - name: Get video duration
       run: |
