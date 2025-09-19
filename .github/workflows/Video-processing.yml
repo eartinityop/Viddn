@@ -1,4 +1,4 @@
-pname: Video Processor and Publisher
+name: Video Processor and Publisher
 
 on:
   workflow_dispatch:
