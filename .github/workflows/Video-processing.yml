@@ -57,6 +57,15 @@ jobs:
     - name: Parse video ranges
       shell: bash
       run: |
+        # First, check if playlist_urls.txt exists and has content
+        if [ ! -f "playlist_urls.txt" ] || [ ! -s "playlist_urls.txt" ]; then
+          echo "Error: playlist_urls.txt doesn't exist or is empty"
+          exit 1
+        fi
+    
+        echo "Contents of playlist_urls.txt:"
+        cat playlist_urls.txt
+    
         # Parse the input ranges
         CLEAN_RANGES=$(echo "${{ github.event.inputs.video_ranges }}" | tr -d ' ')
         IFS=',' read -ra RANGES <<< "$CLEAN_RANGES"
