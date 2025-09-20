@@ -1,10 +1,10 @@
-name: Video Processor and Publisher
+name: Playlist Processor and Uploader
 
 on:
   workflow_dispatch:
     inputs:
-      video_url:
-        description: 'Direct download URL of the video'
+      playlist_url:
+        description: 'YouTube Playlist URL'
         required: true
         type: string
       playback_speed:
@@ -12,27 +12,32 @@ on:
         required: true
         type: number
         default: 1.5
-      split_timestamps:
-        description: 'Comma-separated timestamps for splitting (HH:MM:SS)'
+      video_ranges:
+        description: 'Comma-separated video ranges to merge (e.g., 1-5,6-10)'
         required: true
         type: string
-        default: '01:00:00,02:00:00'
+        default: '1-5,6-10'
+      resolution:
+        description: 'Video resolution (e.g., 720p, 1080p)'
+        required: true
+        type: string
+        default: '720p'
       release_name:
         description: 'Release Name'
         required: true
         type: string
       video_title:
-        description: 'Title for the YouTube Video'
+        description: 'Title for YouTube Video'
         required: true
         type: string
-        
+
 permissions:
   contents: write
 
 jobs:
-  process-video:
+  process-playlist:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 600  # 10 hours for long playlists
 
     steps:
     - name: Checkout repository
@@ -41,115 +46,126 @@ jobs:
     - name: Install required packages
       run: |
         sudo apt-get update
-        sudo apt-get install -y ffmpeg wget bc
+        sudo apt-get install -y ffmpeg wget bc python3 python3-pip jq
+        pip install yt-dlp google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
-    - name: Install Python dependencies
+    - name: Get playlist information
       run: |
-        python3 -m pip install --upgrade pip
-        pip install yt-dlp google-api-python-client google-auth-httplib2 google-auth-oauthlib requests
-      
-    - name: Download video from provided URL
-      run: |
-        echo "${{ secrets.NETRC_B64 }}" | base64 -d > ~/.netrc && yt-dlp --netrc -f "best" -o "%(playlist_title)s/%(title)s [%(id)s].%(ext)s" --embed-metadata --embed-thumbnail --no-overwrites "https://youtube.com/playlist?list=PL_A4M5IAkMaexM2nxZt512ESPt83EshJq&feature=shared"
+        yt-dlp --flat-playlist --print "%(playlist_index)s. %(webpage_url)s" "${{ github.event.inputs.playlist_url }}" --no-warnings > playlist_urls.txt
+        echo "Total videos in playlist: $(wc -l < playlist_urls.txt)"
 
-    - name: Get video duration
-      run: |
-        DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$ORIGINAL_FILENAME")
-        echo "TOTAL_DURATION=$DURATION" >> $GITHUB_ENV
-        echo "Total video duration: $DURATION seconds"
-
-    - name: Prepare split points
+    - name: Parse video ranges
       shell: bash
       run: |
-        # Convert timestamps to seconds and add start/end points
-        IFS=',' read -ra TIMESTAMPS <<< "${{ github.event.inputs.split_timestamps }}"
+        # Parse the input ranges
+        IFS=',' read -ra RANGES <<< "${{ github.event.inputs.video_ranges }}"
+        RANGE_COUNT=0
         
-        # Add start point (0 seconds)
-        SPLIT_POINTS="0"
-        
-        # Convert HH:MM:SS to seconds
-        for timestamp in "${TIMESTAMPS[@]}"; do
-          IFS=':' read -ra TIME <<< "$timestamp"
-          HOURS=${TIME[0]}
-          MINUTES=${TIME[1]}
-          SECONDS=${TIME[2]}
-          TOTAL_SECONDS=$((HOURS * 3600 + MINUTES * 60 + SECONDS))
-          SPLIT_POINTS="$SPLIT_POINTS,$TOTAL_SECONDS"
+        for range in "${RANGES[@]}"; do
+          RANGE_COUNT=$((RANGE_COUNT + 1))
+          IFS='-' read -ra RANGE_PARTS <<< "$range"
+          START=${RANGE_PARTS[0]}
+          END=${RANGE_PARTS[1]}
+          
+          echo "Processing range $RANGE_COUNT: $START to $END"
+          
+          # Extract URLs for this range
+          for i in $(seq $START $END); do
+            URL=$(grep "^$i\." playlist_urls.txt | cut -d' ' -f2-)
+            if [ -n "$URL" ]; then
+              echo "URL_${RANGE_COUNT}_${i}=$URL" >> $GITHUB_ENV
+            fi
+          done
         done
         
-        # Add end point (total duration)
-        SPLIT_POINTS="$SPLIT_POINTS,$TOTAL_DURATION"
-        
-        echo "SPLIT_POINTS=$SPLIT_POINTS" >> $GITHUB_ENV
-        echo "Split points in seconds: $SPLIT_POINTS"
+        echo "RANGE_COUNT=$RANGE_COUNT" >> $GITHUB_ENV
 
-    - name: Split video into parts
+    - name: Process each range
       run: |
-        IFS=',' read -ra POINTS <<< "$SPLIT_POINTS"
-        PART_COUNT=0
-        
-        for i in $(seq 0 $((${#POINTS[@]} - 2))); do
-          START=${POINTS[i]}
-          END=${POINTS[i+1]}
+        for range_index in $(seq 1 $RANGE_COUNT); do
+          echo "Processing range $range_index"
           
-          if (( $(echo "$END > $START" | bc -l) )); then
-            PART_COUNT=$((PART_COUNT + 1))
-            OUTPUT_FILE="${BASE_FILENAME}_part${PART_COUNT}.mp4"
+          # Get all video URLs for this range
+          VIDEO_INDEX=0
+          VIDEO_URLS=""
+          
+          for var in $(env | grep "URL_${range_index}_" | cut -d= -f1); do
+            VIDEO_INDEX=$((VIDEO_INDEX + 1))
+            URL=${!var}
+            VIDEO_URLS="$VIDEO_URLS $URL"
+          done
+          
+          echo "Found $VIDEO_INDEX videos in range $range_index"
+          
+          # Download each video in this range
+          for url in $VIDEO_URLS; do
+            echo "Getting direct download URL for: $url"
             
-            echo "Splitting part $PART_COUNT: $START to $END seconds"
+            # Get direct download URL using yt-dlp
+            DIRECT_URL=$(yt-dlp -f "best[height<=${{ github.event.inputs.resolution }}]" -g "$url" 2>/dev/null | head -1)
             
-            ffmpeg -i "$ORIGINAL_FILENAME" \
-              -ss "$START" -to "$END" \
-              -c copy \
-              "$OUTPUT_FILE"
+            if [ -n "$DIRECT_URL" ]; then
+              echo "Downloading: $DIRECT_URL"
+              wget -O "video_${range_index}_${VIDEO_INDEX}.mp4" "$DIRECT_URL"
+            else
+              echo "Failed to get direct URL for: $url"
+            fi
+          done
+          
+          # Merge all videos in this range
+          if [ $VIDEO_INDEX -gt 0 ]; then
+            echo "Merging $VIDEO_INDEX videos for range $range_index"
+            
+            # Create file list for concatenation
+            for i in $(seq 1 $VIDEO_INDEX); do
+              echo "file 'video_${range_index}_${i}.mp4'" >> filelist_${range_index}.txt
+            done
+            
+            # Merge videos
+            ffmpeg -f concat -safe 0 -i filelist_${range_index}.txt -c copy "merged_${range_index}.mp4"
+            
+            # Process with speed adjustment
+            SPEED_FACTOR=$(echo "scale=10; 1 / ${{ github.event.inputs.playback_speed }}" | bc)
+            
+            ffmpeg -i "merged_${range_index}.mp4" -filter_complex "[0:v]setpts=0.6666666666*PTS[v];[0:a]atempo=${{ github.event.inputs.playback_speed }}[a]" -map "[v]" -map "[a]" -c:v libx264 -profile:v main -level 4.0 -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "processed_range_${range_index}.mp4"
+            
+            # Cleanup temporary files
+            rm -f filelist_${range_index}.txt "merged_${range_index}.mp4"
+            for i in $(seq 1 $VIDEO_INDEX); do
+              rm -f "video_${range_index}_${i}.mp4"
+            done
           fi
         done
-        
-        echo "PART_COUNT=$PART_COUNT" >> $GITHUB_ENV
-        
-    - name: Process each part with speed adjustment
-      run: |
-        for i in $(seq 1 $PART_COUNT); do
-          INPUT_FILE="${BASE_FILENAME}_part${i}.mp4"
-          OUTPUT_FILE="${BASE_FILENAME}_part${i}_processed.mp4"
-          
-          echo "Processing part $i: $INPUT_FILE"
-          
-          SPEED_FACTOR=$(echo "scale=10; 1 / ${{ github.event.inputs.playback_speed }}" | bc)      
-        
-          ffmpeg -i "$INPUT_FILE" -filter_complex "[0:v]setpts=0.6666666666*PTS[v];[0:a]atempo=${{ github.event.inputs.playback_speed }}[a]" -map "[v]" -map "[a]" -c:v libx264 -profile:v main -level 4.0 -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "$OUTPUT_FILE"
 
-          #Cleanup original split part
-          rm -f "$INPUT_FILE"
-        done
-      
-    - name: Create Release and Upload Asset
+    - name: Create Release
       id: create_release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: video-${{ github.run_id }}
+        tag_name: playlist-${{ github.run_id }}
         name: "${{ github.event.inputs.release_name }}"
         body: |
-          Video split into ${{ env.PART_COUNT }} parts and processed at ${{ github.event.inputs.playback_speed }}x speed
-          - Original URL: ${{ github.event.inputs.video_url }}
-          - Split timestamps: ${{ github.event.inputs.split_timestamps }}
+          Playlist processed with ranges: ${{ github.event.inputs.video_ranges }}
+          - Playlist URL: ${{ github.event.inputs.playlist_url }}
+          - Resolution: ${{ github.event.inputs.resolution }}
+          - Speed: ${{ github.event.inputs.playback_speed }}x
         draft: false
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Upload processed parts to Release
+    - name: Upload processed ranges to Release
       run: |
-        for i in $(seq 1 $PART_COUNT); do
-          FILE="${BASE_FILENAME}_part${i}_processed.mp4"
-          echo "Uploading $FILE to release"
-          
-          curl -s \
-            -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Content-Type: application/octet-stream" \
-            --data-binary @"$FILE" \
-            "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.create_release.outputs.id }}/assets?name=$(basename "$FILE")"
+        for i in $(seq 1 $RANGE_COUNT); do
+          if [ -f "processed_range_${i}.mp4" ]; then
+            echo "Uploading range $i to release"
+            
+            curl -s \
+              -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"processed_range_${i}.mp4" \
+              "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.create_release.outputs.id }}/assets?name=range_${i}.mp4"
+          fi
         done
 
     - name: Generate YouTube access token
@@ -164,30 +180,33 @@ jobs:
         access_token=$(echo $response | jq -r '.access_token')
         echo "ACCESS_TOKEN=$access_token" >> $GITHUB_ENV
 
-    - name: Upload to YouTube using Python script
+    - name: Upload to YouTube
       run: |
         # Download the upload script
-        wget https://raw.githubusercontent.com/eartinityop/Viddn/YT/youtube_upload.py
-    
-        for i in $(seq 1 $PART_COUNT); do
-          VIDEO_FILE="${BASE_FILENAME}_part${i}_processed.mp4"
-          TITLE="${{ github.event.inputs.video_title }} - Part $i of $PART_COUNT"
-          DESCRIPTION="Part $i of $PART_COUNT. Processed at ${{ github.event.inputs.playback_speed }}x speed"
-      
-          echo "Uploading part $i to YouTube..."
-      
-          python3 youtube_upload.py \
-            --file "$VIDEO_FILE" \
-            --title "$TITLE" \
-            --description "$DESCRIPTION" \
-            --access_token "$ACCESS_TOKEN" \
-            --privacy "private"
-        done
+        wget -q https://raw.githubusercontent.com/eartinityop/Viddn/YT/youtube_upload.py
         
+        for i in $(seq 1 $RANGE_COUNT); do
+          if [ -f "processed_range_${i}.mp4" ]; then
+            VIDEO_FILE="processed_range_${i}.mp4"
+            TITLE="${{ github.event.inputs.video_title }} - Range $i"
+            DESCRIPTION="Range $i of $RANGE_COUNT. Processed at ${{ github.event.inputs.playback_speed }}x speed from playlist"
+            
+            echo "Uploading range $i to YouTube..."
+            
+            python3 youtube_upload.py \
+              --file "$VIDEO_FILE" \
+              --title "$TITLE" \
+              --description "$DESCRIPTION" \
+              --access_token "$ACCESS_TOKEN" \
+              --privacy "private"
+          fi
+        done
+
     - name: Final cleanup
       run: |
         # Clean up all processed files
-        rm -f "$ORIGINAL_FILENAME"
-        for i in $(seq 1 $PART_COUNT); do
-          rm -f "${BASE_FILENAME}_part${i}_processed.mp4"
+        rm -f playlist_urls.txt
+        for i in $(seq 1 $RANGE_COUNT); do
+          rm -f "processed_range_${i}.mp4"
         done
+        rm -f youtube_upload.py
