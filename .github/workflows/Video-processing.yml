@@ -79,23 +79,23 @@ jobs:
           
           echo "Processing range $RANGE_COUNT: $START to $END"
 
-          #Create a file to store URLs for this range
+          # Create a file to store URLs for this range
           RANGE_FILE="range_${RANGE_COUNT}_urls.txt"
-          > "$RANGE_FILE" #Clear the file if it exists already
+          > "$RANGE_FILE"  # Clear the file if it exists already
 
           # Extract URLs for this range
           for i in $(seq $START $END); do
             # Handle both with and without leading zeros
             URL=$(grep -E "^0*$i\." playlist_urls.txt | cut -d' ' -f2-)
             if [ -n "$URL" ]; then
-              echo "URL" >> "$RANGE_FILE"
+              echo "$URL" >> "$RANGE_FILE"  # Fixed: was echoing "URL" instead of $URL
               echo "Found URL for video $i: $URL"
             else
               echo "Warning: No URL found for video $i"
             fi
           done
           
-          #Store the range file name as an environment variable
+          # Store the range file name as an environment variable
           echo "RANGE_${RANGE_COUNT}_FILE=$RANGE_FILE" >> $GITHUB_ENV
         done
       
@@ -107,7 +107,8 @@ jobs:
           echo "Processing range $range_index"
           
           # Get the file containing URLs for this range
-          RANGE_FILE="range_${range_index}_urls.txt"
+          RANGE_FILE_VAR="RANGE_${range_index}_FILE"
+          RANGE_FILE=${!RANGE_FILE_VAR}
           
           # Check if the range file exists and has content
           if [ ! -f "$RANGE_FILE" ] || [ ! -s "$RANGE_FILE" ]; then
@@ -145,21 +146,31 @@ jobs:
             echo "No videos downloaded for range $range_index, skipping."
             continue
           fi
-            
-            # Merge videos
-            ffmpeg -f concat -safe 0 -i filelist_${range_index}.txt -c copy "merged_${range_index}.mp4"
-            
-            # Process with speed adjustment
-            SPEED_FACTOR=$(echo "scale=10; 1 / ${{ github.event.inputs.playback_speed }}" | bc)
-            
-            ffmpeg -i "merged_${range_index}.mp4" -filter_complex "[0:v]setpts=0.6666666666*PTS[v];[0:a]atempo=${{ github.event.inputs.playback_speed }}[a]" -map "[v]" -map "[a]" -c:v libx264 -profile:v main -level 4.0 -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "processed_range_${range_index}.mp4"
-            
-            # Cleanup temporary files
-            rm -f filelist_${range_index}.txt "merged_${range_index}.mp4"
-            for i in $(seq 1 $VIDEO_INDEX); do
-              rm -f "video_${range_index}_${i}.mp4"
-            done
-          fi
+          
+          # Create file list for concatenation
+          for i in $(seq 1 $VIDEO_INDEX); do
+            echo "file 'video_${range_index}_${i}.mp4'" >> "filelist_${range_index}.txt"
+          done
+          
+          # Merge videos
+          ffmpeg -f concat -safe 0 -i "filelist_${range_index}.txt" -c copy "merged_${range_index}.mp4"
+          
+          # Process with speed adjustment
+          SPEED_FACTOR=$(echo "scale=10; 1 / ${{ github.event.inputs.playback_speed }}" | bc)
+          
+          ffmpeg -i "merged_${range_index}.mp4" \
+          -filter_complex "[0:v]setpts=${SPEED_FACTOR}*PTS[v];[0:a]atempo=${{ github.event.inputs.playback_speed }}[a]" \
+          -map "[v]" -map "[a]" \
+          -c:v libx264 -profile:v main -level 4.0 -pix_fmt yuv420p \
+          -c:a aac -b:a 128k \
+          -movflags +faststart \
+          "processed_range_${range_index}.mp4"
+          
+          # Cleanup temporary files
+          rm -f "filelist_${range_index}.txt" "merged_${range_index}.mp4"
+          for i in $(seq 1 $VIDEO_INDEX); do
+            rm -f "video_${range_index}_${i}.mp4"
+          done
         done
 
     - name: Create Release
@@ -232,6 +243,7 @@ jobs:
         # Clean up all processed files
         rm -f playlist_urls.txt
         for i in $(seq 1 $RANGE_COUNT); do
+          rm -f "range_${i}_urls.txt"
           rm -f "processed_range_${i}.mp4"
         done
         rm -f youtube_upload.py
