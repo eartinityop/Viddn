@@ -94,17 +94,11 @@ jobs:
               echo "Warning: No URL found for video $i"
             fi
           done
-        done
           
-          # Extract URLs for this range
-          for i in $(seq $START $END); do
-            URL=$(grep "^$i\." playlist_urls.txt | cut -d' ' -f2-)
-            if [ -n "$URL" ]; then
-              echo "URL_${RANGE_COUNT}_${i}=$URL" >> $GITHUB_ENV
-            fi
-          done
+          #Store the range file name as an environment variable
+          echo "RANGE_${RANGE_COUNT}_FILE=$RANGE_FILE" >> $GITHUB_ENV
         done
-        
+      
         echo "RANGE_COUNT=$RANGE_COUNT" >> $GITHUB_ENV
 
     - name: Process each range
