@@ -105,21 +105,16 @@ jobs:
       run: |
         for range_index in $(seq 1 $RANGE_COUNT); do
           echo "Processing range $range_index"
+
+          #Get all the files containing URLs for the range
+          RANGE_FILE_VAR="RANGE_${range_index}_FILE"
+          RANGE_FILE=${!RANGE_FILE_VAR}
           
-          # Get all video URLs for this range
+          # Read all URLs from the file
           VIDEO_INDEX=0
-          VIDEO_URLS=""
-          
-          for var in $(env | grep "URL_${range_index}_" | cut -d= -f1); do
+          while IFS= read -r URL; do
             VIDEO_INDEX=$((VIDEO_INDEX + 1))
-            URL=${!var}
-            VIDEO_URLS="$VIDEO_URLS $URL"
-          done
           
-          echo "Found $VIDEO_INDEX videos in range $range_index"
-          
-          # Download each video in this range
-          for url in $VIDEO_URLS; do
             echo "Getting direct download URL for: $url"
             
             # Get direct download URL using yt-dlp
@@ -131,7 +126,7 @@ jobs:
             else
               echo "Failed to get direct URL for: $url"
             fi
-          done
+          done < "$RANGE_FILE"
           
           # Merge all videos in this range
           if [ $VIDEO_INDEX -gt 0 ]; then
