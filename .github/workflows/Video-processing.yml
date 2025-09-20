@@ -105,22 +105,17 @@ jobs:
       run: |
         for range_index in $(seq 1 $RANGE_COUNT); do
           echo "Processing range $range_index"
-
-          # Get all the files containing URLs for the range
+          
+          # Get the file containing URLs for this range
           RANGE_FILE="range_${range_index}_urls.txt"
-
-          # Check if the range file exists and has content 
-          if [ ! -f "$RANGE_FILE" ] || [ ! -s "$RANGE_FILE ]; then
+          
+          # Check if the range file exists and has content
+          if [ ! -f "$RANGE_FILE" ] || [ ! -s "$RANGE_FILE" ]; then
             echo "Error: File $RANGE_FILE doesn't exist or is empty"
             exit 1
           fi
-
-          # Debug: Show contents of the range file
-          echo "Contents of the $RANGE_FILE:"
-          cat "$RANGE_FILE"
-          echo "----End of file content----" 
           
-          # Read all URLs from the file
+          # Read URLs from the file
           VIDEO_INDEX=0
           while IFS= read -r URL || [ -n "$URL" ]; do
             # Skip empty lines
@@ -129,34 +124,27 @@ jobs:
             fi
             
             VIDEO_INDEX=$((VIDEO_INDEX + 1))
-          
-            echo "Getting direct download URL for: $url"
+            
+            echo "Getting direct download URL for: $URL"
             
             # Get direct download URL using yt-dlp
-            DIRECT_URL=$(yt-dlp -f "best[height<=${{ github.event.inputs.resolution }}]" -g "$url" 2>/dev/null | head -1)
+            DIRECT_URL=$(yt-dlp -f "best[height<=${{ github.event.inputs.resolution }}]" -g "$URL" 2>/dev/null | head -1)
             
             if [ -n "$DIRECT_URL" ]; then
               echo "Downloading: $DIRECT_URL"
               wget -O "video_${range_index}_${VIDEO_INDEX}.mp4" "$DIRECT_URL"
             else
-              echo "Failed to get direct URL for: $url"
+              echo "Failed to get direct URL for: $URL"
+              # Try alternative method if direct URL fails
+              yt-dlp -f "best[height<=${{ github.event.inputs.resolution }}]" -o "video_${range_index}_${VIDEO_INDEX}.mp4" "$URL"
             fi
           done < "$RANGE_FILE"
-
+          
           # If no videos were downloaded, skip the rest
           if [ $VIDEO_INDEX -eq 0 ]; then
-            echo "No videos were downloaded for the range $range_index, skipping."
+            echo "No videos downloaded for range $range_index, skipping."
             continue
           fi
-          
-          # Merge all videos in this range
-          if [ $VIDEO_INDEX -gt 0 ]; then
-            echo "Merging $VIDEO_INDEX videos for range $range_index"
-            
-            # Create file list for concatenation
-            for i in $(seq 1 $VIDEO_INDEX); do
-              echo "file 'video_${range_index}_${i}.mp4'" >> filelist_${range_index}.txt
-            done
             
             # Merge videos
             ffmpeg -f concat -safe 0 -i filelist_${range_index}.txt -c copy "merged_${range_index}.mp4"
