@@ -58,7 +58,8 @@ jobs:
       shell: bash
       run: |
         # Parse the input ranges
-        IFS=',' read -ra RANGES <<< "${{ github.event.inputs.video_ranges }}"
+        CLEAN_RANGES=$(echo "${{ github.event.inputs.video_ranges }}" | tr -d ' ')
+        IFS=',' read -ra RANGES <<< "$CLEAN_RANGES"
         RANGE_COUNT=0
         
         for range in "${RANGES[@]}"; do
