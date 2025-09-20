@@ -106,13 +106,28 @@ jobs:
         for range_index in $(seq 1 $RANGE_COUNT); do
           echo "Processing range $range_index"
 
-          #Get all the files containing URLs for the range
-          RANGE_FILE_VAR="RANGE_${range_index}_FILE"
-          RANGE_FILE=${!RANGE_FILE_VAR}
+          # Get all the files containing URLs for the range
+          RANGE_FILE="range_${range_index}_urls.txt"
+
+          # Check if the range file exists and has content 
+          if [ ! -f "$RANGE_FILE" ] || [ ! -s "$RANGE_FILE ]; then
+            echo "Error: File $RANGE_FILE doesn't exist or is empty"
+            exit 1
+          fi
+
+          # Debug: Show contents of the range file
+          echo "Contents of the $RANGE_FILE:"
+          cat "$RANGE_FILE"
+          echo "----End of file content----" 
           
           # Read all URLs from the file
           VIDEO_INDEX=0
-          while IFS= read -r URL; do
+          while IFS= read -r URL || [ -n "$URL" ]; do
+            # Skip empty lines
+            if [ -z "$URL" ]; then
+              continue
+            fi
+            
             VIDEO_INDEX=$((VIDEO_INDEX + 1))
           
             echo "Getting direct download URL for: $url"
@@ -127,6 +142,12 @@ jobs:
               echo "Failed to get direct URL for: $url"
             fi
           done < "$RANGE_FILE"
+
+          # If no videos were downloaded, skip the rest
+          if [ $VIDEO_INDEX -eq 0 ]; then
+            echo "No videos were downloaded for the range $range_index, skipping."
+            continue
+          fi
           
           # Merge all videos in this range
           if [ $VIDEO_INDEX -gt 0 ]; then
