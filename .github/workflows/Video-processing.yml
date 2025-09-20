@@ -78,6 +78,19 @@ jobs:
           END=${RANGE_PARTS[1]}
           
           echo "Processing range $RANGE_COUNT: $START to $END"
+
+          # Extract URLs for this range
+          for i in $(seq $START $END); do
+            # Handle both with and without leading zeros
+            URL=$(grep -E "^0*$i\." playlist_urls.txt | cut -d' ' -f2-)
+            if [ -n "$URL" ]; then
+              echo "URL_${RANGE_COUNT}_${i}=$URL" >> $GITHUB_ENV
+              echo "Found URL for video $i: $URL"
+            else
+              echo "Warning: No URL found for video $i"
+            fi
+          done
+        done
           
           # Extract URLs for this range
           for i in $(seq $START $END); do
