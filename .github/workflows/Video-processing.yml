@@ -136,8 +136,6 @@ jobs:
               wget -O "video_${range_index}_${VIDEO_INDEX}.mp4" "$DIRECT_URL"
             else
               echo "Failed to get direct URL for: $URL"
-              # Try alternative method if direct URL fails
-              yt-dlp -f "best[height<=${{ github.event.inputs.resolution }}]" -o "video_${range_index}_${VIDEO_INDEX}.mp4" "$URL"
             fi
           done < "$RANGE_FILE"
           
@@ -158,13 +156,8 @@ jobs:
           # Process with speed adjustment
           SPEED_FACTOR=$(echo "scale=10; 1 / ${{ github.event.inputs.playback_speed }}" | bc)
           
-          ffmpeg -i "merged_${range_index}.mp4" \
-          -filter_complex "[0:v]setpts=${SPEED_FACTOR}*PTS[v];[0:a]atempo=${{ github.event.inputs.playback_speed }}[a]" \
-          -map "[v]" -map "[a]" \
-          -c:v libx264 -profile:v main -level 4.0 -pix_fmt yuv420p \
-          -c:a aac -b:a 128k \
-          -movflags +faststart \
-          "processed_range_${range_index}.mp4"
+          ffmpeg -i "$INPUT_FILE" -filter_complex "[0:v]setpts=0.6666666666*PTS[v];[0:a]atempo=${{ github.event.inputs.playback_speed }}[a]" -map "[v]" -map "[a]" -c:v libx264 -profile:v main -level 4.0 -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "$OUTPUT_FILE"
+          
           
           # Cleanup temporary files
           rm -f "filelist_${range_index}.txt" "merged_${range_index}.mp4"
