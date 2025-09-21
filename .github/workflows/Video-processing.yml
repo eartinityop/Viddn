@@ -39,7 +39,7 @@ jobs:
         sudo apt-get install -y ffmpeg wget bc python3 python3-pip jq
         pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
-    - name: Download range files
+    - name: Download and rename range files
       run: |
         # Split the input URLs
         IFS=',' read -ra RANGE_FILE_URLS <<< "${{ github.event.inputs.range_files_urls }}"
@@ -48,18 +48,18 @@ jobs:
         for range_url in "${RANGE_FILE_URLS[@]}"; do
           RANGE_COUNT=$((RANGE_COUNT + 1))
           
-          # Download the range file
+          # Download the range file with proper naming
           echo "Downloading range file $RANGE_COUNT from: $range_url"
-          wget -O "range_${RANGE_COUNT}_links.txt" "$range_url"
+          wget -O "range_${RANGE_COUNT}.txt" "$range_url"
           
           # Check if download was successful
-          if [ ! -f "range_${RANGE_COUNT}_links.txt" ] || [ ! -s "range_${RANGE_COUNT}_links.txt" ]; then
+          if [ ! -f "range_${RANGE_COUNT}.txt" ] || [ ! -s "range_${RANGE_COUNT}.txt" ]; then
             echo "Error: Failed to download range file $RANGE_COUNT"
             exit 1
           fi
           
-          echo "Contents of range_${RANGE_COUNT}_links.txt:"
-          head -5 "range_${RANGE_COUNT}_links.txt"
+          echo "Contents of range_${RANGE_COUNT}.txt:"
+          head -5 "range_${RANGE_COUNT}.txt"
           echo "---"
         done
         
@@ -70,7 +70,7 @@ jobs:
         for range_index in $(seq 1 $RANGE_COUNT); do
           echo "Processing range $range_index"
           
-          RANGE_FILE="range_${range_index}_links.txt"
+          RANGE_FILE="range_${range_index}.txt"
           
           # Check if the range file exists and has content
           if [ ! -f "$RANGE_FILE" ] || [ ! -s "$RANGE_FILE" ]; then
@@ -87,7 +87,7 @@ jobs:
             fi
             
             # Extract the direct download URL (remove numbering if present)
-            DIRECT_URL=$(echo "$LINE" | sed -E 's/^[0-9]+\. //' | tr -d '"')
+            DIRECT_URL=$(echo "$LINE" | sed -E 's/^[0-9]+\. //' | tr -d '"' | tr -d '\r')
             
             if [ -n "$DIRECT_URL" ]; then
               VIDEO_INDEX=$((VIDEO_INDEX + 1))
@@ -224,7 +224,7 @@ jobs:
       run: |
         # Clean up all processed files
         for i in $(seq 1 $RANGE_COUNT); do
-          rm -f "range_${i}_links.txt"
+          rm -f "range_${i}.txt"
           rm -f "processed_range_${i}.mp4"
         done
         rm -f youtube_upload.py
