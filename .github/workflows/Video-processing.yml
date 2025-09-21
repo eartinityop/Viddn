@@ -49,12 +49,12 @@ jobs:
         sudo apt-get install -y ffmpeg wget bc python3 python3-pip jq
         pip install yt-dlp google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
-    - name: Get playlist information
+    - name: Get all playlist URLs with proper numbering
       run: |
-        yt-dlp --flat-playlist --print "%(playlist_index)s. %(webpage_url)s" "${{ github.event.inputs.playlist_url }}" --no-warnings > playlist_urls.txt
+        yt-dlp --get-url --flat-playlist "${{ github.event.inputs.playlist_url }}" -o "%(title)s - %(url)s" > playlist_urls.txt
         echo "Total videos in playlist: $(wc -l < playlist_urls.txt)"
 
-    - name: Parse video ranges
+    - name: Parse video ranges and create range files
       shell: bash
       run: |
         # First, check if playlist_urls.txt exists and has content
@@ -79,65 +79,117 @@ jobs:
           
           echo "Processing range $RANGE_COUNT: $START to $END"
 
-          # Create a file to store URLs for this range
-          RANGE_FILE="range_${RANGE_COUNT}_urls.txt"
-          > "$RANGE_FILE"  # Clear the file if it exists already
+          # Create a file to store YouTube URLs for this range
+          YT_RANGE_FILE="yt_range_${RANGE_COUNT}_urls.txt"
+          > "$YT_RANGE_FILE"  # Clear the file if it exists already
 
-          # Extract URLs for this range
+          # Extract YouTube URLs for this range
           for i in $(seq $START $END); do
-            # Handle both with and without leading zeros
-            URL=$(grep -E "^0*$i\." playlist_urls.txt | cut -d' ' -f2-)
+            # Get the YouTube URL for this index
+            URL=$(sed -n "${i}p" playlist_urls.txt | cut -d' ' -f3-)
             if [ -n "$URL" ]; then
-              echo "$URL" >> "$RANGE_FILE"  # Fixed: was echoing "URL" instead of $URL
-              echo "Found URL for video $i: $URL"
+              echo "$URL" >> "$YT_RANGE_FILE"
+              echo "Found YouTube URL for video $i: $URL"
             else
-              echo "Warning: No URL found for video $i"
+              echo "Warning: No YouTube URL found for video $i"
             fi
           done
           
           # Store the range file name as an environment variable
-          echo "RANGE_${RANGE_COUNT}_FILE=$RANGE_FILE" >> $GITHUB_ENV
+          echo "YT_RANGE_${RANGE_COUNT}_FILE=$YT_RANGE_FILE" >> $GITHUB_ENV
         done
       
         echo "RANGE_COUNT=$RANGE_COUNT" >> $GITHUB_ENV
 
-    - name: Process each range
+    - name: Generate direct download links for each range
       run: |
         for range_index in $(seq 1 $RANGE_COUNT); do
-          echo "Processing range $range_index"
+          echo "Generating direct download links for range $range_index"
           
-          # Get the file containing URLs for this range
-          RANGE_FILE_VAR="RANGE_${range_index}_FILE"
-          RANGE_FILE=${!RANGE_FILE_VAR}
+          # Get the file containing YouTube URLs for this range
+          YT_RANGE_FILE_VAR="YT_RANGE_${range_index}_FILE"
+          YT_RANGE_FILE=${!YT_RANGE_FILE_VAR}
           
           # Check if the range file exists and has content
-          if [ ! -f "$RANGE_FILE" ] || [ ! -s "$RANGE_FILE" ]; then
-            echo "Error: File $RANGE_FILE doesn't exist or is empty"
+          if [ ! -f "$YT_RANGE_FILE" ] || [ ! -s "$YT_RANGE_FILE" ]; then
+            echo "Error: File $YT_RANGE_FILE doesn't exist or is empty"
             exit 1
           fi
           
-          # Read URLs from the file
-          VIDEO_INDEX=0
-          while IFS= read -r URL || [ -n "$URL" ]; do
+          # Create output file for direct download links
+          DIRECT_LINKS_FILE="direct_links_range_${range_index}.txt"
+          > "$DIRECT_LINKS_FILE"  # Clear the file if it exists
+          
+          # Read YouTube URLs from the file and generate direct download links
+          LINE_NUMBER=1
+          while IFS= read -r YT_URL || [ -n "$YT_URL" ]; do
             # Skip empty lines
-            if [ -z "$URL" ]; then
+            if [ -z "$YT_URL" ]; then
               continue
             fi
             
-            VIDEO_INDEX=$((VIDEO_INDEX + 1))
+            echo "Processing: $YT_URL"
             
-            echo "Getting direct download URL for: $URL"
+            # Get direct download link using yt-dlp
+            DIRECT_LINK=$(yt-dlp -g -f "best[height<=${{ github.event.inputs.resolution }}]" "$YT_URL" 2>/dev/null | head -1)
             
-            # Get direct download URL using yt-dlp
-            DIRECT_URL=$(yt-dlp -f "best[height<=${{ github.event.inputs.resolution }}]" -g "$URL" 2>/dev/null | head -1)
+            if [ -n "$DIRECT_LINK" ]; then
+              # Format the number with leading zero for single-digit numbers
+              printf -v FORMATTED_NUMBER "%02d" "$LINE_NUMBER"
+              
+              # Write to output file with proper numbering
+              echo "$FORMATTED_NUMBER. $DIRECT_LINK" >> "$DIRECT_LINKS_FILE"
+              echo "Direct download link saved: $DIRECT_LINK"
+            else
+              echo "Warning: Failed to get direct download link for: $YT_URL"
+            fi
+            
+            # Increment line number
+            LINE_NUMBER=$((LINE_NUMBER + 1))
+            
+            # Add a small delay to avoid overwhelming servers
+            sleep 1
+          done < "$YT_RANGE_FILE"
+          
+          echo "Direct download links for range $range_index saved to $DIRECT_LINKS_FILE"
+          
+          # Store the direct links file name as an environment variable
+          echo "DIRECT_LINKS_${range_index}_FILE=$DIRECT_LINKS_FILE" >> $GITHUB_ENV
+        done
+
+    - name: Process each range with direct download links
+      run: |
+        for range_index in $(seq 1 $RANGE_COUNT); do
+          echo "Processing range $range_index with direct download links"
+          
+          # Get the file containing direct download links for this range
+          DIRECT_LINKS_FILE_VAR="DIRECT_LINKS_${range_index}_FILE"
+          DIRECT_LINKS_FILE=${!DIRECT_LINKS_FILE_VAR}
+          
+          # Check if the direct links file exists and has content
+          if [ ! -f "$DIRECT_LINKS_FILE" ] || [ ! -s "$DIRECT_LINKS_FILE" ]; then
+            echo "Error: File $DIRECT_LINKS_FILE doesn't exist or is empty"
+            exit 1
+          fi
+          
+          # Read direct download links from the file
+          VIDEO_INDEX=0
+          while IFS= read -r LINE || [ -n "$LINE" ]; do
+            # Skip empty lines
+            if [ -z "$LINE" ]; then
+              continue
+            fi
+            
+            # Extract the direct download URL (remove the numbering)
+            DIRECT_URL=$(echo "$LINE" | cut -d' ' -f2-)
             
             if [ -n "$DIRECT_URL" ]; then
-              echo "Downloading: $DIRECT_URL"
+              VIDEO_INDEX=$((VIDEO_INDEX + 1))
+              
+              echo "Downloading video $VIDEO_INDEX from direct URL"
               wget -O "video_${range_index}_${VIDEO_INDEX}.mp4" "$DIRECT_URL"
-            else
-              echo "Failed to get direct URL for: $URL"
             fi
-          done < "$RANGE_FILE"
+          done < "$DIRECT_LINKS_FILE"
           
           # If no videos were downloaded, skip the rest
           if [ $VIDEO_INDEX -eq 0 ]; then
@@ -156,15 +208,21 @@ jobs:
           # Process with speed adjustment
           SPEED_FACTOR=$(echo "scale=10; 1 / ${{ github.event.inputs.playback_speed }}" | bc)
           
-          ffmpeg -i "$INPUT_FILE" -filter_complex "[0:v]setpts=0.6666666666*PTS[v];[0:a]atempo=${{ github.event.inputs.playback_speed }}[a]" -map "[v]" -map "[a]" -c:v libx264 -profile:v main -level 4.0 -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart "$OUTPUT_FILE"
+          ffmpeg -i "merged_${range_index}.mp4" \
+          -filter_complex "[0:v]setpts=${SPEED_FACTOR}*PTS[v];[0:a]atempo=${{ github.event.inputs.playback_speed }}[a]" \
+          -map "[v]" -map "[a]" \
+          -c:v libx264 -profile:v main -level 4.0 -pix_fmt yuv420p \
+          -c:a aac -b:a 128k \
+          -movflags +faststart \
+          "processed_range_${range_index}.mp4"
           
-          
-          # Cleanup temporary files
+          # Cleanup temporary files for this range
           rm -f "filelist_${range_index}.txt" "merged_${range_index}.mp4"
           for i in $(seq 1 $VIDEO_INDEX); do
             rm -f "video_${range_index}_${i}.mp4"
           done
         done
+
 
     - name: Create Release
       id: create_release
